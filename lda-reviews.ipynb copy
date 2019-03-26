@@ -1,0 +1,424 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[nltk_data] Downloading package stopwords to /Users/ada/nltk_data...\n",
+      "[nltk_data]   Package stopwords is already up-to-date!\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "True"
+      ]
+     },
+     "execution_count": 1,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Run in python console\n",
+    "import nltk; nltk.download('stopwords')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import re\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from pprint import pprint\n",
+    "\n",
+    "# Gensim\n",
+    "import gensim\n",
+    "import gensim.corpora as corpora\n",
+    "from gensim.utils import simple_preprocess\n",
+    "from gensim.models import CoherenceModel\n",
+    "\n",
+    "# spacy for lemmatization\n",
+    "import spacy\n",
+    "\n",
+    "# Plotting tools\n",
+    "import pyLDAvis\n",
+    "import pyLDAvis.gensim  # don't skip this\n",
+    "import matplotlib.pyplot as plt\n",
+    "%matplotlib inline\n",
+    "\n",
+    "# Enable logging for gensim - optional\n",
+    "import logging\n",
+    "logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.ERROR)\n",
+    "\n",
+    "import warnings\n",
+    "warnings.filterwarnings(\"ignore\",category=DeprecationWarning)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# NLTK Stop words\n",
+    "from nltk.corpus import stopwords\n",
+    "stop_words = stopwords.words('english')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0                    host canceled reservation day arrival \n",
+      "1         two friends stayed four half months great plac...\n",
+      "2         family wonderful stay melissa home rooms large...\n",
+      "3         host canceled reservation day arrival automate...\n",
+      "4         house beautiful rooms nice homey feel backyard...\n",
+      "5         really enjoyed stay burbank house clean great ...\n",
+      "6         charles amazing made stay special nice helpful...\n",
+      "7         charles place great clean centrally located al...\n",
+      "8         charles place lovely great location central cl...\n",
+      "9         charles wonderful host enjoyed stay bed comfor...\n",
+      "10        chas great host friendly welcoming informative...\n",
+      "11        chas great space loved clean everything availa...\n",
+      "12        chas house feels like home clean bright energy...\n",
+      "13        chas really good host gives lot good advice st...\n",
+      "14        clean host friendly reasonable price good loca...\n",
+      "15        staying chas absolute pleasure accommodating r...\n",
+      "16        wonderful stay everything start end perfect co...\n",
+      "17        wow charles delight meet warm friendly man mad...\n",
+      "18        absolutely fantastic stay rev hospitality kind...\n",
+      "19        amazing months la spent wonderful yoga pod hou...\n",
+      "20        bed pull loveseat ground level living room ope...\n",
+      "21        coming venice beach yoga teacher training exha...\n",
+      "22        described totally home felt good vibe day one ...\n",
+      "23        first hostess exceptional hostess gracious con...\n",
+      "24        great time great location quiet leafy serene m...\n",
+      "25        havde en fantastisk tid hos yoga priestess et ...\n",
+      "26        house absolutely delightful lovely garden coul...\n",
+      "27        kind accommodating arrive introduce neighborho...\n",
+      "28        louise diana gave warm welcome place clean ide...\n",
+      "29        nice apartment awesome location used live bloc...\n",
+      "                                ...                        \n",
+      "598956    host canceled reservation days arrival automat...\n",
+      "598957    star stay thanks aida exceptional host sure ti...\n",
+      "598958    host canceled reservation days arrival automat...\n",
+      "598959    could asked better place stay malibu plenty be...\n",
+      "598960    house exactly advertised beautiful photos woul...\n",
+      "598961    probably best airbnb experiences location supe...\n",
+      "598962    darvin place amazing expecting find penthouse ...\n",
+      "598963    naji place wonderful better expected look forw...\n",
+      "598964                               would definitely stay \n",
+      "598965    great location loved stay felt like home would...\n",
+      "598966           wonderful experience ray superb host stay \n",
+      "598967    host canceled reservation days arrival automat...\n",
+      "598968    host canceled reservation days arrival automat...\n",
+      "598969                                    local clean safe \n",
+      "598970    host canceled reservation days arrival automat...\n",
+      "598971    host canceled reservation days arrival automat...\n",
+      "598972                                          nice place \n",
+      "598973                     good place stay night impressed \n",
+      "598974    booked apartment late notice owner incredibly ...\n",
+      "598975    steal townhouse even better shows photos locat...\n",
+      "598976                                     beautiful place \n",
+      "598977          great hospitality need something ask found \n",
+      "598978    host canceled reservation days arrival automat...\n",
+      "598979    host canceled reservation days arrival automat...\n",
+      "598980                     room comfortable attentive back \n",
+      "598981    host canceled reservation days arrival automat...\n",
+      "598982    host canceled reservation days arrival automat...\n",
+      "598983    host canceled reservation days arrival automat...\n",
+      "598984    neighborhood tourists lost homless people apar...\n",
+      "598985    host canceled reservation days arrival automat...\n",
+      "Name: review, Length: 1201175, dtype: object\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Import Dataset\n",
+    "df1 = pd.read_csv('cleaned_1.csv', names = ['listing_id','review_date','review'])\n",
+    "df2 = pd.read_csv('cleaned_2.csv', names = ['listing_id','review_date','review'])\n",
+    "df = pd.concat([df1,df2])\n",
+    "reviews = df['review']\n",
+    "\n",
+    "print(reviews)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "['bon', 'rapport', 'prix', 'et', 'bien', 'des', 'grandes', 'de', 'la', 'est', 'bien', 'la', 'chambre', 'confortable', 'la', 'moquette', 'est', 'douceur', 'de', 'diner', 'dans', 'les', 'le', 'fast', 'food', 'peine', 'en', 'voiture', 'nous', 'malheureusement', 'pas', 'les', 'uniquement', 'leur', 'petit', 'chat']\n"
+     ]
+    }
+   ],
+   "source": [
+    "def sent_to_words(sentences):\n",
+    "    for sentence in sentences:\n",
+    "        yield(gensim.utils.simple_preprocess(str(sentence), deacc=True))  # deacc=True removes punctuations\n",
+    "\n",
+    "data_words = list(sent_to_words(reviews))\n",
+    "\n",
+    "print(data_words[100])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/Users/ada/anaconda3/lib/python3.7/site-packages/gensim/models/phrases.py:494: UserWarning: For a faster implementation, use the gensim.models.phrases.Phraser class\n",
+      "  warnings.warn(\"For a faster implementation, use the gensim.models.phrases.Phraser class\")\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "['bon_rapport_prix', 'et', 'bien', 'des', 'grandes', 'de', 'la', 'est', 'bien', 'la', 'chambre', 'confortable', 'la', 'moquette', 'est', 'douceur', 'de', 'diner', 'dans', 'les', 'le', 'fast', 'food', 'peine', 'en_voiture', 'nous_malheureusement_pas', 'les', 'uniquement', 'leur', 'petit', 'chat']\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Build the bigram and trigram models\n",
+    "bigram = gensim.models.Phrases(data_words, min_count=5, threshold=100) # higher threshold fewer phrases.\n",
+    "trigram = gensim.models.Phrases(bigram[data_words], threshold=100)  \n",
+    "\n",
+    "# Faster way to get a sentence clubbed as a trigram/bigram\n",
+    "bigram_mod = gensim.models.phrases.Phraser(bigram)\n",
+    "trigram_mod = gensim.models.phrases.Phraser(trigram)\n",
+    "\n",
+    "# See trigram example\n",
+    "print(trigram_mod[bigram_mod[data_words[100]]])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Define functions for stopwords, bigrams, trigrams and lemmatization\n",
+    "def remove_stopwords(texts):\n",
+    "    return [[word for word in simple_preprocess(str(doc)) if word not in stop_words] for doc in texts]\n",
+    "\n",
+    "def make_bigrams(texts):\n",
+    "    return [bigram_mod[doc] for doc in texts]\n",
+    "\n",
+    "def make_trigrams(texts):\n",
+    "    return [trigram_mod[bigram_mod[doc]] for doc in texts]\n",
+    "\n",
+    "def lemmatization(texts, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):\n",
+    "    \"\"\"https://spacy.io/api/annotation\"\"\"\n",
+    "    texts_out = []\n",
+    "    for sent in texts:\n",
+    "        doc = nlp(\" \".join(sent)) \n",
+    "        texts_out.append([token.lemma_ for token in doc if token.pos_ in allowed_postags])\n",
+    "    return texts_out"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[['host', 'canceled_reservation', 'day', 'arrival']]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Remove Stop Words\n",
+    "data_words_nostops = remove_stopwords(data_words)\n",
+    "\n",
+    "# Form Bigrams\n",
+    "data_words_bigrams = make_bigrams(data_words_nostops)\n",
+    "\n",
+    "# Initialize spacy 'en' model, keeping only tagger component (for efficiency)\n",
+    "# python3 -m spacy download en\n",
+    "nlp = spacy.load('en', disable=['parser', 'ner'])\n",
+    "\n",
+    "# Do lemmatization keeping only noun, adj, vb, adv\n",
+    "data_lemmatized = lemmatization(data_words_bigrams, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV'])\n",
+    "\n",
+    "print(data_lemmatized[:1])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[[(0, 1), (1, 1), (2, 1), (3, 1)]]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Create Dictionary\n",
+    "id2word = corpora.Dictionary(data_lemmatized)\n",
+    "\n",
+    "# Create Corpus\n",
+    "texts = data_lemmatized\n",
+    "\n",
+    "# Term Document Frequency\n",
+    "corpus = [id2word.doc2bow(text) for text in texts]\n",
+    "\n",
+    "# View\n",
+    "print(corpus[:1])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[[('arrival', 1), ('canceled_reservation', 1), ('day', 1), ('host', 1)]]"
+      ]
+     },
+     "execution_count": 11,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Human readable format of corpus (term-frequency)\n",
+    "[[(id2word[id], freq) for id, freq in cp] for cp in corpus[:1]]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "KeyboardInterrupt",
+     "evalue": "",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mKeyboardInterrupt\u001b[0m                         Traceback (most recent call last)",
+      "\u001b[0;32m<ipython-input-13-d70f73769bb3>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[1;32m      8\u001b[0m                                            \u001b[0mpasses\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;36m10\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      9\u001b[0m                                            \u001b[0malpha\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m'auto'\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 10\u001b[0;31m                                            per_word_topics=True)\n\u001b[0m",
+      "\u001b[0;32m~/anaconda3/lib/python3.7/site-packages/gensim/models/ldamodel.py\u001b[0m in \u001b[0;36m__init__\u001b[0;34m(self, corpus, num_topics, id2word, distributed, chunksize, passes, update_every, alpha, eta, decay, offset, eval_every, iterations, gamma_threshold, minimum_probability, random_state, ns_conf, minimum_phi_value, per_word_topics, callbacks, dtype)\u001b[0m\n\u001b[1;32m    369\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0mcorpus\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    370\u001b[0m             \u001b[0muse_numpy\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdispatcher\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 371\u001b[0;31m             \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mupdate\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mcorpus\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mchunks_as_numpy\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0muse_numpy\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    372\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    373\u001b[0m     \u001b[0;32mdef\u001b[0m \u001b[0minit_dir_prior\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mprior\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mname\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/anaconda3/lib/python3.7/site-packages/gensim/models/ldamodel.py\u001b[0m in \u001b[0;36mupdate\u001b[0;34m(self, corpus, chunksize, decay, offset, passes, update_every, eval_every, iterations, gamma_threshold, chunks_as_numpy)\u001b[0m\n\u001b[1;32m    732\u001b[0m                         \u001b[0mlogger\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0minfo\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m\"reached the end of input; now waiting for all remaining jobs to finish\"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    733\u001b[0m                         \u001b[0mother\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdispatcher\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mgetstate\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 734\u001b[0;31m                     \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdo_mstep\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mrho\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mother\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mpass_\u001b[0m \u001b[0;34m>\u001b[0m \u001b[0;36m0\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    735\u001b[0m                     \u001b[0;32mdel\u001b[0m \u001b[0mother\u001b[0m  \u001b[0;31m# frees up memory\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    736\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/anaconda3/lib/python3.7/site-packages/gensim/models/ldamodel.py\u001b[0m in \u001b[0;36mdo_mstep\u001b[0;34m(self, rho, other, extra_pass)\u001b[0m\n\u001b[1;32m    775\u001b[0m         \u001b[0mdiff\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mnp\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mlog\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mexpElogbeta\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    776\u001b[0m         \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mstate\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mblend\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mrho\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mother\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 777\u001b[0;31m         \u001b[0mdiff\u001b[0m \u001b[0;34m-=\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mstate\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mget_Elogbeta\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    778\u001b[0m         \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0msync_state\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    779\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/anaconda3/lib/python3.7/site-packages/gensim/models/ldamodel.py\u001b[0m in \u001b[0;36mget_Elogbeta\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m    169\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    170\u001b[0m     \u001b[0;32mdef\u001b[0m \u001b[0mget_Elogbeta\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 171\u001b[0;31m         \u001b[0;32mreturn\u001b[0m \u001b[0mdirichlet_expectation\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mget_lambda\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    172\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    173\u001b[0m     \u001b[0;34m@\u001b[0m\u001b[0mclassmethod\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;31mKeyboardInterrupt\u001b[0m: "
+     ]
+    }
+   ],
+   "source": [
+    "# Build LDA model\n",
+    "lda_model = gensim.models.ldamodel.LdaModel(corpus=corpus,\n",
+    "                                           id2word=id2word,\n",
+    "                                           num_topics=20, \n",
+    "                                           random_state=100,\n",
+    "                                           update_every=1,\n",
+    "                                           chunksize=100,\n",
+    "                                           passes=10,\n",
+    "                                           alpha='auto',\n",
+    "                                           per_word_topics=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Print the Keyword in the 10 topics\n",
+    "pprint(lda_model.print_topics())\n",
+    "doc_lda = lda_model[corpus]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Compute Perplexity\n",
+    "print('\\nPerplexity: ', lda_model.log_perplexity(corpus))  # a measure of how good the model is. lower the better.\n",
+    "\n",
+    "# Compute Coherence Score\n",
+    "coherence_model_lda = CoherenceModel(model=lda_model, texts=data_lemmatized, dictionary=id2word, coherence='c_v')\n",
+    "coherence_lda = coherence_model_lda.get_coherence()\n",
+    "print('\\nCoherence Score: ', coherence_lda)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Visualize the topics\n",
+    "pyLDAvis.enable_notebook()\n",
+    "vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)\n",
+    "vis"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.1"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
